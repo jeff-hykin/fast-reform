@@ -1,0 +1,48 @@
+#!/usr/bin/env -S deno run -A
+// Rebuild the wasm, serve web/ over a tiny static server, and open the demo in
+// the browser. Stays running until Ctrl-C.
+import { $ } from "https://esm.sh/dax-sh@0.42.0"
+
+const root = $.path(import.meta.dirname).join("..").resolve()
+const webDir = root.join("web")
+const port = 8731
+
+// Always ship the latest wasm.
+await $`deno run -A ${root.join("run/build")}`
+
+const contentTypes = {
+    ".html": "text/html; charset=utf-8",
+    ".js": "text/javascript; charset=utf-8",
+    ".css": "text/css; charset=utf-8",
+    ".wasm": "application/wasm",
+    ".png": "image/png",
+}
+
+Deno.serve({ port }, (request) => {
+    const url = new URL(request.url)
+    let requestPath = decodeURIComponent(url.pathname)
+    if (requestPath === "/") {
+        requestPath = "/index.html"
+    }
+    // Keep requests inside web/.
+    if (requestPath.includes("..")) {
+        return new Response("forbidden", { status: 403 })
+    }
+    const filePath = webDir.join("." + requestPath)
+    try {
+        const bytes = Deno.readFileSync(filePath.toString())
+        const extension = requestPath.slice(requestPath.lastIndexOf("."))
+        const contentType = contentTypes[extension] ?? "application/octet-stream"
+        return new Response(bytes, { headers: { "content-type": contentType } })
+    } catch {
+        return new Response("not found", { status: 404 })
+    }
+})
+
+const address = `http://localhost:${port}/index.html`
+console.log(`✓ serving ${webDir} at ${address}`)
+
+const opener = Deno.build.os === "darwin" ? "open" : "xdg-open"
+await $`${opener} ${address}`.noThrow()
+
+console.log("Press Ctrl-C to stop.")

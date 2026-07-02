@@ -1,0 +1,20 @@
+[package]
+name = "fast-reform"
+version = "0.1.0"
+edition = "2021"
+description = "Fast per-point loop-closure warp for point clouds (Rust port of jnav apply_closure)"
+license = "Apache-2.0"
+repository = "https://github.com/jeff-hykin/fast-reform"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+# rayon is only pulled in on native targets; the wasm build (raw C-ABI, no
+# wasm-bindgen) falls back to a serial per-point loop.
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = "1"
+
+[profile.release]
+opt-level = 3
+lto = true
+panic = "abort"

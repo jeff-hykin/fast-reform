@@ -1,0 +1,5 @@
+/target
+/proofshot-artifacts
+/web/proofshot-artifacts
+/web/fast_reform.wasm
+Cargo.lock

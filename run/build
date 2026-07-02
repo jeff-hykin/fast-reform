@@ -1,0 +1,20 @@
+#!/usr/bin/env -S deno run -A
+// Compile fast-reform: native release lib + wasm module, then stage the wasm
+// into web/ so the demo always loads the freshly built binary.
+import { $ } from "https://esm.sh/dax-sh@0.42.0"
+
+const root = $.path(import.meta.dirname).join("..").resolve()
+$.cd(root)
+
+console.log("→ building native lib (release)")
+await $`cargo build --release`
+
+console.log("→ building wasm (wasm32-unknown-unknown)")
+await $`cargo build --release --target wasm32-unknown-unknown`
+
+const wasmSource = root.join("target/wasm32-unknown-unknown/release/fast_reform.wasm")
+const wasmDestination = root.join("web/fast_reform.wasm")
+wasmSource.copyFileSync(wasmDestination)
+
+const kilobytes = (wasmDestination.statSync().size / 1024).toFixed(1)
+console.log(`✓ staged web/fast_reform.wasm (${kilobytes} KB)`)
