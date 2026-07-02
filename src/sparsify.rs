@@ -26,6 +26,7 @@ pub fn sparsify(graph_delta: &GraphDelta3D, target_nodes: usize) -> GraphDelta3D
         return graph_delta.clone();
     }
 
+    let ids: Vec<u64> = graph_delta.nodes.iter().map(|node| node.id).collect();
     let positions: Vec<Vec3> = graph_delta.nodes.iter().map(|node| node.position).collect();
     let times: Vec<f64> = graph_delta.nodes.iter().map(|node| node.ts).collect();
     let rotations: Vec<Quat> = graph_delta
@@ -66,8 +67,10 @@ pub fn sparsify(graph_delta: &GraphDelta3D, target_nodes: usize) -> GraphDelta3D
         kept.remove(most_redundant);
     }
 
-    let nodes: Vec<Node> =
-        kept.iter().map(|&index| Node { ts: times[index], position: positions[index] }).collect();
+    let nodes: Vec<Node> = kept
+        .iter()
+        .map(|&index| Node { id: ids[index], ts: times[index], position: positions[index] })
+        .collect();
     let transforms: Vec<Transform> = kept
         .iter()
         .map(|&index| Transform { translation: translations[index], rotation: rotations[index] })
@@ -78,6 +81,206 @@ pub fn sparsify(graph_delta: &GraphDelta3D, target_nodes: usize) -> GraphDelta3D
         transforms,
         blend_sigma: graph_delta.blend_sigma,
         blend_time_sigma: graph_delta.blend_time_sigma,
+    }
+}
+
+/// The node arrays a sparsification pass reads: parallel per-node data plus the
+/// (possibly auto) blend bandwidths carried from the source `GraphDelta3D`.
+struct NodeArrays {
+    ids: Vec<u64>,
+    positions: Vec<Vec3>,
+    times: Vec<f64>,
+    rotations: Vec<Quat>,
+    translations: Vec<Vec3>,
+    blend_sigma: f64,
+    blend_time_sigma: f64,
+}
+
+impl NodeArrays {
+    fn from_delta(graph_delta: &GraphDelta3D) -> Self {
+        NodeArrays {
+            ids: graph_delta.nodes.iter().map(|node| node.id).collect(),
+            positions: graph_delta.nodes.iter().map(|node| node.position).collect(),
+            times: graph_delta.nodes.iter().map(|node| node.ts).collect(),
+            rotations: graph_delta
+                .transforms
+                .iter()
+                .map(|transform| transform.rotation.normalized_or_identity())
+                .collect(),
+            translations: graph_delta.transforms.iter().map(|transform| transform.translation).collect(),
+            blend_sigma: graph_delta.blend_sigma,
+            blend_time_sigma: graph_delta.blend_time_sigma,
+        }
+    }
+
+    /// Resolve the space + time bandwidths for a given member subset (auto-picks
+    /// from spacing when the source configured `<= 0`), matching `to_blend_arrays`.
+    fn sigmas(&self, members: &[usize]) -> (f64, f64) {
+        let sigma = resolved_sigma(self.blend_sigma, members, &self.positions, spatial_distance);
+        let time_sigma =
+            resolved_sigma(self.blend_time_sigma, members, &self.times, |a, b| (a - b).abs());
+        (sigma, time_sigma)
+    }
+
+    /// Where the blend of `members` sends the anchor at node `index`. `skip_slot`
+    /// (an index *into `members`*) drops that one member from the blend; pass
+    /// `usize::MAX` to blend over all of them.
+    fn deform(&self, members: &[usize], skip_slot: usize, index: usize, sigma: f64, time_sigma: f64) -> Vec3 {
+        let anchor = self.positions[index];
+        let (rotation, translation) = blend_excluding(
+            skip_slot,
+            members,
+            &self.positions,
+            &self.times,
+            &self.rotations,
+            &self.translations,
+            anchor,
+            self.times[index],
+            sigma,
+            time_sigma,
+        );
+        apply(rotation, translation, anchor)
+    }
+}
+
+/// Thin `graph_delta` as far as possible while the total reconstruction error of
+/// the kept correction stays within `max_error`, measured against the **full**
+/// correction at the original node anchors (not just the shrinking kept set — so
+/// the budget bounds drift from the true deformation, not from an intermediate
+/// one). Error is the summed anchor displacement between the full and thinned
+/// deformations over the dropped nodes.
+///
+/// `seed_ids`, when `Some`, **warm-starts** from a previously kept selection
+/// (matched by node id): the pass begins from that subset instead of the full
+/// graph, adds nodes back if the seed is over budget, then keeps dropping while
+/// under budget. Re-thinning an updated pose graph you have thinned before is
+/// then cheap — it starts near the answer instead of from every node.
+pub fn sparsify_within_error(
+    graph_delta: &GraphDelta3D,
+    max_error: f64,
+    seed_ids: Option<&[u64]>,
+) -> GraphDelta3D {
+    let count = graph_delta.len();
+    if count <= 1 {
+        return graph_delta.clone();
+    }
+    let arrays = NodeArrays::from_delta(graph_delta);
+    let all: Vec<usize> = (0..count).collect();
+
+    // The "truth" every kept subset is scored against: the full-graph deformation
+    // at each node anchor, computed once with the full-set bandwidths.
+    let (full_sigma, full_time_sigma) = arrays.sigmas(&all);
+    let full_targets: Vec<Vec3> =
+        (0..count).map(|i| arrays.deform(&all, usize::MAX, i, full_sigma, full_time_sigma)).collect();
+
+    let mut in_kept = vec![true; count];
+    if let Some(seed) = seed_ids {
+        let wanted: std::collections::HashSet<u64> = seed.iter().copied().collect();
+        let mut any = false;
+        for index in 0..count {
+            in_kept[index] = wanted.contains(&arrays.ids[index]);
+            any |= in_kept[index];
+        }
+        // A seed that matches nothing (e.g. first run, or all ids changed) falls
+        // back to the full graph.
+        if !any {
+            in_kept.iter_mut().for_each(|flag| *flag = true);
+        }
+    }
+    let mut kept: Vec<usize> = (0..count).filter(|&index| in_kept[index]).collect();
+
+    // Total error of the current selection: sum over dropped nodes of how far the
+    // kept blend misses the full deformation at that node's anchor.
+    let total_error = |kept: &[usize], in_kept: &[bool], sigma: f64, time_sigma: f64| -> f64 {
+        (0..count)
+            .filter(|&d| !in_kept[d])
+            .map(|d| spatial_distance(full_targets[d], arrays.deform(kept, usize::MAX, d, sigma, time_sigma)))
+            .sum()
+    };
+
+    // If the warm-start seed is already over budget, add back the worst-missed
+    // dropped node until it fits (or nothing is left to restore).
+    loop {
+        let (sigma, time_sigma) = arrays.sigmas(&kept);
+        let mut worst: Option<usize> = None;
+        let mut worst_error = f64::NEG_INFINITY;
+        let mut total = 0.0;
+        for d in 0..count {
+            if in_kept[d] {
+                continue;
+            }
+            let error =
+                spatial_distance(full_targets[d], arrays.deform(&kept, usize::MAX, d, sigma, time_sigma));
+            total += error;
+            if error > worst_error {
+                worst_error = error;
+                worst = Some(d);
+            }
+        }
+        if total <= max_error {
+            break;
+        }
+        match worst {
+            Some(d) => {
+                in_kept[d] = true;
+                kept = (0..count).filter(|&index| in_kept[index]).collect();
+            }
+            None => break,
+        }
+    }
+
+    // Greedily drop the cheapest-to-remove node while the resulting total error
+    // stays within budget.
+    while kept.len() > 1 {
+        let (sigma, time_sigma) = arrays.sigmas(&kept);
+        let mut best_slot = 0;
+        let mut best_error = f64::INFINITY;
+        for slot in 0..kept.len() {
+            let node = kept[slot];
+            let reconstructed = arrays.deform(&kept, slot, node, sigma, time_sigma);
+            let error = spatial_distance(full_targets[node], reconstructed);
+            if error < best_error {
+                best_error = error;
+                best_slot = slot;
+            }
+        }
+
+        let candidate = kept[best_slot];
+        let mut trial = kept.clone();
+        trial.remove(best_slot);
+        in_kept[candidate] = false;
+        let (trial_sigma, trial_time_sigma) = arrays.sigmas(&trial);
+        if total_error(&trial, &in_kept, trial_sigma, trial_time_sigma) <= max_error {
+            kept = trial;
+        } else {
+            in_kept[candidate] = true;
+            break;
+        }
+    }
+
+    build_delta(graph_delta, &arrays, &kept)
+}
+
+/// Assemble a `GraphDelta3D` from the kept member indices, preserving node ids and
+/// carrying the source bandwidths through.
+fn build_delta(source: &GraphDelta3D, arrays: &NodeArrays, kept: &[usize]) -> GraphDelta3D {
+    let nodes: Vec<Node> = kept
+        .iter()
+        .map(|&index| Node {
+            id: arrays.ids[index],
+            ts: arrays.times[index],
+            position: arrays.positions[index],
+        })
+        .collect();
+    let transforms: Vec<Transform> = kept
+        .iter()
+        .map(|&index| Transform { translation: arrays.translations[index], rotation: arrays.rotations[index] })
+        .collect();
+    GraphDelta3D {
+        nodes,
+        transforms,
+        blend_sigma: source.blend_sigma,
+        blend_time_sigma: source.blend_time_sigma,
     }
 }
 
@@ -247,6 +450,37 @@ mod tests {
         let count = scene.graph_delta.len();
         let thinned = sparsify(&scene.graph_delta, count + 10);
         assert_eq!(thinned, scene.graph_delta);
+    }
+
+    /// A zero budget forbids any error, so every node is kept; a generous budget
+    /// drops nodes. Kept ids stay a subset of the originals in both cases.
+    #[test]
+    fn error_budget_bounds_how_many_nodes_drop() {
+        let scene = generate_scene(&LoopParams::default());
+        let count = scene.graph_delta.len();
+
+        let strict = sparsify_within_error(&scene.graph_delta, 0.0, None);
+        assert_eq!(strict.len(), count, "zero budget must keep every node");
+
+        let generous = sparsify_within_error(&scene.graph_delta, 1.0, None);
+        assert!(generous.len() < count, "a generous budget should drop nodes");
+
+        let original_ids: std::collections::HashSet<u64> =
+            scene.graph_delta.nodes.iter().map(|node| node.id).collect();
+        assert!(generous.nodes.iter().all(|node| original_ids.contains(&node.id)));
+    }
+
+    /// Warm-starting from a subset of ids begins the search there; the result is
+    /// still a valid within-budget thinning (a subset of the originals).
+    #[test]
+    fn warm_start_seed_is_honored() {
+        let scene = generate_scene(&LoopParams::default());
+        let seed: Vec<u64> = scene.graph_delta.nodes.iter().map(|node| node.id).take(15).collect();
+        let thinned = sparsify_within_error(&scene.graph_delta, 0.3, Some(&seed));
+        let original_ids: std::collections::HashSet<u64> =
+            scene.graph_delta.nodes.iter().map(|node| node.id).collect();
+        assert!(!thinned.nodes.is_empty());
+        assert!(thinned.nodes.iter().all(|node| original_ids.contains(&node.id)));
     }
 
     /// The whole point: dropping redundant nodes must still close the loop. Warp

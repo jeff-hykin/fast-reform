@@ -146,7 +146,7 @@ pub fn generate_scene(params: &LoopParams) -> SyntheticScene {
         node_positions.push([open_center.x as f32, open_center.y as f32, open_center.z as f32]);
         node_times.push(time);
 
-        graph_delta.nodes.push(Node { ts: time, position: open_center });
+        graph_delta.nodes.push(Node { id: index as u64, ts: time, position: open_center });
         graph_delta.transforms.push(inverse(&drift));
     }
 

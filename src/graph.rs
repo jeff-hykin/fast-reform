@@ -31,9 +31,12 @@ impl Transform {
 /// One keyframe node. `position` is the keyframe's spatial anchor in the cloud's
 /// (pre-correction / open-loop) frame — the warp blends node deltas by how close
 /// a point is to these anchors, so the correction is a smooth function of *space*.
-/// `ts` is kept for context but no longer drives the warp.
+/// `ts` binds the node to the pose-graph timeline. `id` is a stable identity that
+/// survives across PGO updates, so a sparsifier can match "the nodes I kept last
+/// time" onto a fresh correction even though their deltas changed.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Node {
+    pub id: u64,
     pub ts: f64,
     pub position: Vec3,
 }

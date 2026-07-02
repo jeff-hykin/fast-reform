@@ -151,8 +151,8 @@ mod tests {
     fn two_node_delta() -> GraphDelta3D {
         GraphDelta3D {
             nodes: vec![
-                Node { ts: 0.0, position: Vec3::ZERO },
-                Node { ts: 1.0, position: Vec3::new(10.0, 0.0, 0.0) },
+                Node { id: 0, ts: 0.0, position: Vec3::ZERO },
+                Node { id: 1, ts: 1.0, position: Vec3::new(10.0, 0.0, 0.0) },
             ],
             transforms: vec![translate_x(0.0), translate_x(6.0)],
             blend_sigma: 2.0,
@@ -192,7 +192,7 @@ mod tests {
     fn empty_cloud_passes_through() {
         let cloud = PointCloud2::default();
         let delta = GraphDelta3D {
-            nodes: vec![Node { ts: 0.0, position: Vec3::ZERO }],
+            nodes: vec![Node { id: 0, ts: 0.0, position: Vec3::ZERO }],
             transforms: vec![Transform::IDENTITY],
             blend_sigma: 1.0,
             blend_time_sigma: 1.0,
@@ -217,7 +217,7 @@ mod tests {
             ..PointCloud2::default()
         };
         let delta = GraphDelta3D {
-            nodes: vec![Node { ts: 0.0, position: Vec3::ZERO }],
+            nodes: vec![Node { id: 0, ts: 0.0, position: Vec3::ZERO }],
             transforms: vec![translate_x(5.0)],
             blend_sigma: 1.0,
             blend_time_sigma: 1.0,

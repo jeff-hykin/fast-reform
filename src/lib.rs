@@ -23,5 +23,5 @@ pub use graph::{GraphDelta3D, Node, Transform};
 pub use math::{Quat, Vec3};
 pub use point_cloud::PointCloud2;
 pub use reform::Reformer;
-pub use sparsify::sparsify;
+pub use sparsify::{sparsify, sparsify_within_error};
 pub use warp::{apply_closure_to_cloud, warp_positions};

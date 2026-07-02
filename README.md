@@ -98,6 +98,37 @@ treated as an unordered set, so this also works for multi-robot graphs with no
 single keyframe sequence. In the demo, thinning 48 nodes down to ~10 still closes
 the loop to a ~4px seam gap.
 
+### Thinning to an error budget instead of a node count
+
+When you would rather bound the *error* than pick a count, `sparsify_within_error`
+drops as many nodes as it can while the total anchor error — measured against the
+**full** deformation, so the budget bounds real drift — stays within `max_error`:
+
+```rust
+use fast_reform::sparsify_within_error;
+
+let thinned = sparsify_within_error(&graph_delta, 0.05, None);
+```
+
+For a live pipeline, hold a [`Reformer`](src/reform.rs): each keyframe carries a
+stable `id`, so when a new PGO correction arrives (same nodes, updated deltas) the
+reformer **warm-starts** the thinning from the nodes it kept last time instead of
+re-searching from scratch:
+
+```rust
+let mut reformer = Reformer::new(full_correction);
+reformer.sparsify_within_error(0.05);      // initial thin
+
+// ... next PGO update over the same node ids ...
+reformer.update_within_error(next_correction, 0.05);  // warm-started
+let warped = reformer.apply(&cloud);
+```
+
+Because it begins from the previous selection (adding a few nodes back if the new
+deltas pushed it over budget, or dropping a few more if there is slack), a graph
+with hundreds of nodes re-thins in a handful of iterations rather than from every
+node.
+
 ### How this differs from the original `apply_closure.py`
 
 | aspect | Python original | fast-reform |
