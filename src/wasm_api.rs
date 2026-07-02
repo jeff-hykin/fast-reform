@@ -7,7 +7,7 @@
 
 use crate::point_cloud::PointCloud2;
 use crate::sparsify::sparsify;
-use crate::synthetic::{generate_scene, LoopParams, SyntheticScene};
+use crate::synthetic::{generate_scene, LoopParams, LoopShape, SyntheticScene};
 use crate::warp::apply_closure_to_cloud;
 
 struct DemoState {
@@ -31,17 +31,35 @@ fn state() -> &'static mut DemoState {
     }
 }
 
-/// Build the synthetic scene and warp it at alpha = 0 (open loop). Returns the
-/// number of points.
+/// Build the synthetic scene and warp it at alpha = 0 (open loop). `shape` picks
+/// the trajectory: 0 = circle (disk of lidar), 1 = square hallway (points on the
+/// two corridor walls, drifted "too open"). Returns the number of points.
 #[no_mangle]
-pub extern "C" fn fr_init(seed: u32) -> u32 {
-    // Wide spread so points fill the disk (including the middle) — the demo is
-    // about *seeing* how interior points warp, not a thin lidar ring.
-    let params = LoopParams {
-        seed: seed as u64,
-        sensor_spread: 8.0,
-        points_per_node: 90,
-        ..LoopParams::default()
+pub extern "C" fn fr_init(seed: u32, shape: u32) -> u32 {
+    let params = if shape == 1 {
+        // Square hallway: crisp walls (small scatter) a corridor-width apart, and
+        // a stronger drift so the loop clearly fails to close (a "too-open" square).
+        LoopParams {
+            shape: LoopShape::Square,
+            seed: seed as u64,
+            radius: 10.0,
+            hallway_width: 6.0,
+            sensor_spread: 0.6,
+            points_per_node: 120,
+            drift_yaw: 1.1,
+            drift_shift: 4.0,
+            ..LoopParams::default()
+        }
+    } else {
+        // Circle: wide spread so points fill the disk (including the middle) — the
+        // demo is about *seeing* how interior points warp, not a thin lidar ring.
+        LoopParams {
+            shape: LoopShape::Circle,
+            seed: seed as u64,
+            sensor_spread: 8.0,
+            points_per_node: 90,
+            ..LoopParams::default()
+        }
     };
     let scene = generate_scene(&params);
 

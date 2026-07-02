@@ -5,15 +5,8 @@
 const wasm = await loadWasm("./fast_reform.wasm")
 
 const SEED = 7
-const pointCount = wasm.fr_init(SEED)
-const maxNodes = wasm.fr_max_nodes()
-
-// Per-point normalized time (constant across alpha) drives the rainbow color.
-const pointTimes = readF32(wasm.fr_point_times_ptr(), pointCount)
-
-// Fix the world→screen transform up front from the union of the open-loop and
-// closed-loop extents so the view never jumps as the slider moves.
-const worldBounds = unionBounds(extentsAt(0), extentsAt(1))
+const SHAPE_CIRCLE = 0
+const SHAPE_SQUARE = 1
 
 const canvas = document.getElementById("canvas")
 const context = canvas.getContext("2d")
@@ -23,10 +16,30 @@ const nodesSlider = document.getElementById("nodes")
 const nodesLabel = document.getElementById("nodesLabel")
 const overlay = document.getElementById("overlay")
 const playButton = document.getElementById("play")
+const circleButton = document.getElementById("shapeCircle")
+const squareButton = document.getElementById("shapeSquare")
 
-nodesSlider.max = maxNodes
-nodesSlider.value = maxNodes
-nodesLabel.textContent = maxNodes
+// Scene-dependent state — rebuilt by initScene whenever the shape changes.
+let pointCount = 0
+let maxNodes = 0
+let pointTimes = new Float32Array(0)
+let worldBounds = { minX: -1, minY: -1, maxX: 1, maxY: 1 }
+
+function initScene(shape) {
+    pointCount = wasm.fr_init(SEED, shape)
+    maxNodes = wasm.fr_max_nodes()
+    // Per-point normalized time (constant across alpha) drives the rainbow color.
+    pointTimes = readF32(wasm.fr_point_times_ptr(), pointCount)
+    // Fix the world→screen transform from the union of the open-loop and
+    // closed-loop extents so the view never jumps as the slider moves.
+    worldBounds = unionBounds(extentsAt(0), extentsAt(1))
+
+    nodesSlider.max = maxNodes
+    nodesSlider.value = maxNodes
+    nodesLabel.textContent = maxNodes
+}
+
+initScene(SHAPE_CIRCLE)
 
 let devicePixelScale = 1
 function resize() {
@@ -122,6 +135,17 @@ alphaSlider.addEventListener("input", () => {
 nodesSlider.addEventListener("input", () => {
     draw()
 })
+
+function selectShape(shape, activeButton, inactiveButton) {
+    stopPlaying()
+    activeButton.classList.add("active")
+    inactiveButton.classList.remove("active")
+    alphaSlider.value = 0
+    initScene(shape)
+    draw()
+}
+circleButton.addEventListener("click", () => selectShape(SHAPE_CIRCLE, circleButton, squareButton))
+squareButton.addEventListener("click", () => selectShape(SHAPE_SQUARE, squareButton, circleButton))
 
 // ---- Autoplay: sweep the slider open → closed and back ----
 let playTimer = null

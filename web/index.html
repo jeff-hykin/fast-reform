@@ -40,6 +40,7 @@
         border-radius: 6px; padding: 6px 14px; cursor: pointer; font-size: 13px;
     }
     button:hover { background: #30363d; }
+    button.active { background: #1f6feb; border-color: #1f6feb; color: #fff; }
     .ends { display: flex; justify-content: space-between; font-size: 12px; color: #8b949e; }
     code { color: #58a6ff; }
 </style>
@@ -54,6 +55,11 @@
     <div id="overlay"></div>
 </div>
 <div id="controls">
+    <div class="row">
+        <span style="width:64px; font-size:12px; color:#8b949e;">scene</span>
+        <button id="shapeCircle" class="active">circle</button>
+        <button id="shapeSquare">square hallway (too open)</button>
+    </div>
     <div class="row">
         <button id="play">▶ Play</button>
         <input id="alpha" type="range" min="0" max="1" step="0.001" value="0">
