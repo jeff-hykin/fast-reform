@@ -11,6 +11,7 @@
 pub mod graph;
 pub mod math;
 pub mod point_cloud;
+pub mod reform;
 pub mod sparsify;
 pub mod synthetic;
 pub mod warp;
@@ -21,5 +22,6 @@ pub mod wasm_api;
 pub use graph::{GraphDelta3D, Node, Transform};
 pub use math::{Quat, Vec3};
 pub use point_cloud::PointCloud2;
+pub use reform::Reformer;
 pub use sparsify::sparsify;
 pub use warp::{apply_closure_to_cloud, warp_positions};

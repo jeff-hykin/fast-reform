@@ -115,6 +115,23 @@ use fast_reform::{apply_closure_to_cloud, PointCloud2, GraphDelta3D};
 let warped: PointCloud2 = apply_closure_to_cloud(&cloud, &graph_delta);
 ```
 
+`apply_closure_to_cloud` rebuilds the blend arrays (normalized rotations, node
+anchors/times, resolved bandwidths) on every call. When you apply the same
+correction to many clouds — or re-warp a live map as points stream in — hold a
+[`Reformer`](src/reform.rs) instead: it owns the correction and caches those
+arrays, rebuilding only when the correction changes.
+
+```rust
+use fast_reform::Reformer;
+
+let mut reformer = Reformer::new(graph_delta);
+let warped = reformer.apply(&cloud);   // uses the cached blend
+
+reformer.sparsify(12);                  // thin, cache rebuilt once
+reformer.set_delta(next_delta);         // PGO update, cache rebuilt once
+let warped_again = reformer.apply(&cloud);
+```
+
 Key modules:
 
 - [`src/warp.rs`](src/warp.rs) — `apply_closure_to_cloud`, the per-point warp, and
