@@ -31,7 +31,7 @@ The only native dependency is [rayon](https://docs.rs/rayon). The wasm build nee
 
 ```rust
 use fast_reform::{
-    apply_closure_to_cloud, GraphDelta3D, Node, PointCloud2, Quat, Transform, Vec3,
+    reform, GraphDelta3D, Node, PointCloud2, Quat, Transform, Vec3,
 };
 
 // Two points, each tagged with the time it was observed.
@@ -57,7 +57,7 @@ let correction = GraphDelta3D {
     blend_time_sigma: 0.0,
 };
 
-let warped = apply_closure_to_cloud(&cloud, &correction);
+let warped = reform(&cloud, &correction);
 // The early point barely moves; the late point picks up (most of) the +2 shift.
 assert!(warped.points[0][0].abs() < 0.5);
 assert!(warped.points[1][0] > 11.0);
@@ -112,9 +112,9 @@ frame (`post = delta · pre`); positions are `f32` but the warp computes in `f64
 
 ## Reusing a correction: `Reformer`
 
-`apply_closure_to_cloud` rebuilds its blend arrays on every call. To apply one
-correction to many clouds, hold a `Reformer` — it caches those arrays and rebuilds
-only when the correction changes.
+`reform` rebuilds its blend arrays on every call. To apply one correction to many
+clouds, hold a `Reformer` — it caches those arrays and rebuilds only when the
+correction changes.
 
 ```rust
 use fast_reform::Reformer;
@@ -166,7 +166,7 @@ Everything is re-exported from the crate root (`use fast_reform::...`).
 
 **Warping**
 
-- `apply_closure_to_cloud(cloud: &PointCloud2, delta: &GraphDelta3D) -> PointCloud2`
+- `reform(cloud: &PointCloud2, delta: &GraphDelta3D) -> PointCloud2`
 - `warp_positions(points: &[[f32; 3]], point_times: Option<&[f64]>, deltas: &BlendDeltas) -> Vec<[f32; 3]>`
   — warp raw positions against pre-built arrays (`GraphDelta3D::to_blend_arrays()`).
 

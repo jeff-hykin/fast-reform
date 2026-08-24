@@ -3,7 +3,7 @@
 //! circle, older points move less, results are deterministic).
 
 use fast_reform::synthetic::{generate_scene, LoopParams};
-use fast_reform::{apply_closure_to_cloud, GraphDelta3D};
+use fast_reform::{reform, GraphDelta3D};
 
 fn distance_from_origin(point: [f32; 3]) -> f64 {
     let x = point[0] as f64;
@@ -30,7 +30,7 @@ fn closure_collapses_spiral_back_onto_the_circle() {
     );
 
     // After closure every point sits within the circle's sensor band.
-    let closed = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta);
+    let closed = reform(&scene.cloud, &scene.graph_delta);
     for &point in &closed.points {
         let radius = distance_from_origin(point);
         assert!(
@@ -45,7 +45,7 @@ fn closure_collapses_spiral_back_onto_the_circle() {
 fn older_points_move_less_than_newer_points() {
     let params = LoopParams::default();
     let scene = generate_scene(&params);
-    let closed = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta);
+    let closed = reform(&scene.cloud, &scene.graph_delta);
 
     let displacement = |index: usize| -> f64 {
         let before = scene.cloud.points[index];
@@ -77,7 +77,7 @@ fn older_points_move_less_than_newer_points() {
 fn seam_ends_overlap_after_closure() {
     let params = LoopParams::default();
     let scene = generate_scene(&params);
-    let closed = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta);
+    let closed = reform(&scene.cloud, &scene.graph_delta);
 
     // Warp the node positions too, using the same correction, so we can compare
     // the closed-loop node positions directly.
@@ -86,7 +86,7 @@ fn seam_ends_overlap_after_closure() {
         timestamps: Some(scene.node_times.clone()),
         ..fast_reform::PointCloud2::default()
     };
-    let closed_nodes = apply_closure_to_cloud(&node_cloud, &scene.graph_delta);
+    let closed_nodes = reform(&node_cloud, &scene.graph_delta);
 
     // The last node ends one angular step before node 0, so after closure it
     // should be roughly one chord length away — far closer than the open-loop gap.
@@ -125,11 +125,11 @@ fn scaled_correction_interpolates_open_to_closed() {
     let scene = generate_scene(&params);
 
     // alpha = 0 is the open loop (no change); alpha = 1 is the closed loop.
-    let open = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta.scaled(0.0));
+    let open = reform(&scene.cloud, &scene.graph_delta.scaled(0.0));
     assert_eq!(open.points, scene.cloud.points);
 
-    let closed_full = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta);
-    let closed_scaled = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta.scaled(1.0));
+    let closed_full = reform(&scene.cloud, &scene.graph_delta);
+    let closed_scaled = reform(&scene.cloud, &scene.graph_delta.scaled(1.0));
     assert_eq!(closed_full.points, closed_scaled.points);
 }
 
@@ -137,6 +137,6 @@ fn scaled_correction_interpolates_open_to_closed() {
 fn empty_graph_delta_is_identity() {
     let params = LoopParams::default();
     let scene = generate_scene(&params);
-    let unchanged = apply_closure_to_cloud(&scene.cloud, &GraphDelta3D::default());
+    let unchanged = reform(&scene.cloud, &GraphDelta3D::default());
     assert_eq!(unchanged.points, scene.cloud.points);
 }

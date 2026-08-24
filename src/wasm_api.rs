@@ -8,7 +8,7 @@
 use crate::point_cloud::PointCloud2;
 use crate::sparsify::sparsify;
 use crate::synthetic::{generate_scene, LoopParams, LoopShape, SyntheticScene};
-use crate::warp::apply_closure_to_cloud;
+use crate::warp::reform;
 
 struct DemoState {
     scene: SyntheticScene,
@@ -100,7 +100,7 @@ pub extern "C" fn fr_warp(alpha: f32, node_count: u32) {
     let thinned = sparsify(&demo.scene.graph_delta, node_count as usize);
     let scaled = thinned.scaled(alpha as f64);
 
-    let warped_cloud = apply_closure_to_cloud(&demo.scene.cloud, &scaled);
+    let warped_cloud = reform(&demo.scene.cloud, &scaled);
     for (index, point) in warped_cloud.points.iter().enumerate() {
         demo.point_xy[index * 2] = point[0];
         demo.point_xy[index * 2 + 1] = point[1];
@@ -115,7 +115,7 @@ pub extern "C" fn fr_warp(alpha: f32, node_count: u32) {
         timestamps: Some(thinned.nodes.iter().map(|node| node.ts).collect()),
         ..PointCloud2::default()
     };
-    let warped_nodes = apply_closure_to_cloud(&node_cloud, &scaled);
+    let warped_nodes = reform(&node_cloud, &scaled);
     demo.node_xy.clear();
     for point in &warped_nodes.points {
         demo.node_xy.push(point[0]);

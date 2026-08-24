@@ -127,7 +127,7 @@ pub fn warp_positions(
 /// Warp a whole cloud by a pose-graph correction. Pass-through when the correction
 /// has no nodes or the cloud is empty. Per-point timestamps (when present) keep
 /// points bound to the trajectory segment they were observed on.
-pub fn apply_closure_to_cloud(cloud: &PointCloud2, graph_delta: &GraphDelta3D) -> PointCloud2 {
+pub fn reform(cloud: &PointCloud2, graph_delta: &GraphDelta3D) -> PointCloud2 {
     if graph_delta.is_empty() || cloud.is_empty() {
         return cloud.clone();
     }
@@ -197,7 +197,7 @@ mod tests {
             blend_sigma: 1.0,
             blend_time_sigma: 1.0,
         };
-        assert_eq!(apply_closure_to_cloud(&cloud, &delta), cloud);
+        assert_eq!(reform(&cloud, &delta), cloud);
     }
 
     #[test]
@@ -207,7 +207,7 @@ mod tests {
             ..PointCloud2::default()
         };
         let delta = GraphDelta3D::default();
-        assert_eq!(apply_closure_to_cloud(&cloud, &delta), cloud);
+        assert_eq!(reform(&cloud, &delta), cloud);
     }
 
     #[test]
@@ -222,7 +222,7 @@ mod tests {
             blend_sigma: 1.0,
             blend_time_sigma: 1.0,
         };
-        let warped = apply_closure_to_cloud(&cloud, &delta);
+        let warped = reform(&cloud, &delta);
         assert!((warped.points[0][0] - 5.0).abs() < 1e-6);
         assert!((warped.points[1][0] - 55.0).abs() < 1e-6);
     }

@@ -1,8 +1,8 @@
 //! `Reformer` — a stateful handle around a pose-graph correction.
 //!
-//! The one-shot [`apply_closure_to_cloud`](crate::warp::apply_closure_to_cloud)
-//! rebuilds the blend arrays (normalized rotations, node anchors/times, resolved
-//! bandwidths) on every call. When the same correction is applied to many clouds
+//! The one-shot [`reform`](crate::warp::reform) rebuilds the blend arrays
+//! (normalized rotations, node anchors/times, resolved bandwidths) on every
+//! call. When the same correction is applied to many clouds
 //! — or a live map is re-warped as new points stream in — that rebuild is wasted
 //! work. `Reformer` owns the `GraphDelta3D` and caches its `BlendDeltas`,
 //! recomputing the cache only when the correction changes (`set_delta` /
@@ -126,7 +126,7 @@ impl Reformer {
 mod tests {
     use super::*;
     use crate::synthetic::{generate_scene, LoopParams};
-    use crate::warp::apply_closure_to_cloud;
+    use crate::warp::reform;
 
     #[test]
     fn apply_matches_the_one_shot_function() {
@@ -134,7 +134,7 @@ mod tests {
         let reformer = Reformer::new(scene.graph_delta.clone());
 
         let via_struct = reformer.apply(&scene.cloud);
-        let via_function = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta);
+        let via_function = reform(&scene.cloud, &scene.graph_delta);
         assert_eq!(via_struct, via_function);
     }
 
@@ -147,7 +147,7 @@ mod tests {
 
         reformer.set_delta(scene.graph_delta.clone());
         let warped = reformer.apply(&scene.cloud);
-        assert_eq!(warped, apply_closure_to_cloud(&scene.cloud, &scene.graph_delta));
+        assert_eq!(warped, reform(&scene.cloud, &scene.graph_delta));
     }
 
     #[test]

@@ -434,7 +434,7 @@ fn apply(rotation: Quat, translation: Vec3, point: Vec3) -> Vec3 {
 mod tests {
     use super::*;
     use crate::synthetic::{generate_scene, LoopParams};
-    use crate::warp::apply_closure_to_cloud;
+    use crate::warp::reform;
 
     #[test]
     fn target_node_count_is_respected() {
@@ -492,8 +492,8 @@ mod tests {
         let scene = generate_scene(&LoopParams::default());
         let thinned = sparsify(&scene.graph_delta, 10);
 
-        let full = apply_closure_to_cloud(&scene.cloud, &scene.graph_delta);
-        let sparse = apply_closure_to_cloud(&scene.cloud, &thinned);
+        let full = reform(&scene.cloud, &scene.graph_delta);
+        let sparse = reform(&scene.cloud, &thinned);
 
         let full_gap = seam_gap(&full, scene.cloud.timestamps.as_deref().unwrap());
         let sparse_gap = seam_gap(&sparse, scene.cloud.timestamps.as_deref().unwrap());
