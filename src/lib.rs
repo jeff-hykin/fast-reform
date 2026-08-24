@@ -1,7 +1,6 @@
 //! fast-reform — per-point loop-closure warp for point clouds.
 //!
-//! A Rust reimplementation of jnav's `apply_closure`, differing deliberately:
-//! each point's correction is a proximity-weighted blend of the pose-graph node
+//! Each point's correction is a proximity-weighted blend of the pose-graph node
 //! deltas in **both space and time** (locally non-folding, seam-aware, no
 //! time-bucketing), rotations blend with nlerp, and a dense graph can be thinned
 //! to a target node count with greedy leave-one-out decimation. The native build

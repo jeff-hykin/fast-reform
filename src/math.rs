@@ -27,7 +27,7 @@ pub fn lerp_vec3(start: Vec3, end: Vec3, amount: f64) -> Vec3 {
     }
 }
 
-/// Quaternion in (x, y, z, w) order — matches the reference implementation.
+/// Quaternion in (x, y, z, w) order (scalar last).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Quat {
     pub x: f64,
