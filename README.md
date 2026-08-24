@@ -1,7 +1,6 @@
 # fast-reform
 
-Fast **per-point loop-closure warp** for point clouds — a Rust reimplementation
-of jnav's `apply_closure`.
+Apply bone-like deformation to point clouds quickly.
 
 When a SLAM system detects a loop closure, pose-graph optimization (PGO) retro-
 actively corrects every keyframe pose to remove accumulated drift. But the global
