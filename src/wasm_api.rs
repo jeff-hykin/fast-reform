@@ -37,14 +37,14 @@ fn state() -> &'static mut DemoState {
 #[no_mangle]
 pub extern "C" fn fr_init(seed: u32, shape: u32) -> u32 {
     let params = if shape == 1 {
-        // Square hallway: crisp walls (small scatter) a corridor-width apart, and
-        // a stronger drift so the loop clearly fails to close (a "too-open" square).
+        // Square hallway: two corridor walls a corridor-width apart, and a
+        // stronger drift so the loop clearly fails to close (a "too-open" square).
         LoopParams {
             shape: LoopShape::Square,
             seed: seed as u64,
             radius: 10.0,
             hallway_width: 6.0,
-            sensor_spread: 0.6,
+            sensor_spread: 1.5,
             points_per_node: 120,
             drift_yaw: 1.1,
             drift_shift: 4.0,

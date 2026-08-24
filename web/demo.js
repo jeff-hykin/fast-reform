@@ -39,7 +39,7 @@ function initScene(shape) {
     nodesLabel.textContent = maxNodes
 }
 
-initScene(SHAPE_CIRCLE)
+initScene(SHAPE_SQUARE)
 
 let devicePixelScale = 1
 function resize() {
