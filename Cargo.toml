@@ -2,9 +2,12 @@
 name = "fast-reform"
 version = "0.1.0"
 edition = "2021"
-description = "Fast per-point loop-closure warp for point clouds (Rust port of jnav apply_closure)"
+description = "Apply bone-like deformation to point clouds quickly."
 license = "Apache-2.0"
 repository = "https://github.com/jeff-hykin/fast-reform"
+readme = "README.md"
+keywords = ["pointcloud", "slam", "deformation", "lidar", "robotics"]
+categories = ["science::robotics", "algorithms"]
 
 [lib]
 crate-type = ["cdylib", "rlib"]

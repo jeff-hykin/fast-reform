@@ -48,6 +48,12 @@ pub extern "C" fn fr_init(seed: u32, shape: u32) -> u32 {
             points_per_node: 120,
             drift_yaw: 1.1,
             drift_shift: 4.0,
+            // A window in the right wall with a tree far outside it.
+            window_tree_points: 500,
+            window_fraction: 0.12,
+            window_half: 0.02,
+            tree_distance: 16.0,
+            tree_size: 3.5,
             ..LoopParams::default()
         }
     } else {

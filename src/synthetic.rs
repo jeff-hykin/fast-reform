@@ -44,6 +44,21 @@ pub struct LoopParams {
     pub sensor_spread: f64,
     pub time_step_s: f64,
     pub seed: u64,
+
+    /// Number of lidar returns from a distant landmark ("tree") seen through a
+    /// window in the wall. `0` disables the window/tree entirely. These points
+    /// are all observed at one instant (as the robot passes the window), so they
+    /// inherit that single pose's correction — a good stress test for how a far,
+    /// off-trajectory feature warps.
+    pub window_tree_points: usize,
+    /// Loop fraction of the window (where in the lap the robot passes it).
+    pub window_fraction: f64,
+    /// Half-width (in loop fraction) of the gap carved in the walls at the window.
+    pub window_half: f64,
+    /// How far outside the wall the tree sits.
+    pub tree_distance: f64,
+    /// Radius of the tree's foliage blob.
+    pub tree_size: f64,
 }
 
 impl Default for LoopParams {
@@ -59,6 +74,11 @@ impl Default for LoopParams {
             sensor_spread: 1.6,
             time_step_s: 1.0,
             seed: 1,
+            window_tree_points: 0,
+            window_fraction: 0.0,
+            window_half: 0.0,
+            tree_distance: 0.0,
+            tree_size: 0.0,
         }
     }
 }
@@ -252,6 +272,15 @@ pub fn generate_scene(params: &LoopParams) -> SyntheticScene {
         let fraction = fraction_at(progress);
         let time = time_at(progress);
 
+        // Carve a gap in the wall at the window so the opening is visible.
+        if params.window_tree_points > 0 {
+            let delta = (fraction - params.window_fraction).abs();
+            let wrapped = delta.min(1.0 - delta);
+            if wrapped < params.window_half {
+                continue;
+            }
+        }
+
         let (true_center, _tangent) = path_at(params, fraction);
         let offset = scatter(params, fraction, true_center, &mut rng);
         let true_point = Vec3::new(
@@ -263,6 +292,41 @@ pub fn generate_scene(params: &LoopParams) -> SyntheticScene {
         let open_point = apply(&drift, true_point);
         cloud.points.push([open_point.x as f32, open_point.y as f32, open_point.z as f32]);
         timestamps.push(time);
+    }
+
+    // A distant tree seen through the window. Every return shares the *single*
+    // instant the robot passes the window, so all of them are drifted by that one
+    // pose and (once corrected) inherit that pose's node correction — showing how
+    // a far, off-trajectory feature rides along with its observing keyframe.
+    if params.window_tree_points > 0 {
+        let window_progress = params.window_fraction * params.num_nodes as f64 / last_index;
+        let window_time = time_at(window_progress);
+        let window_drift = drift_at(params, window_progress);
+
+        let (wall_center, _tangent) = path_at(params, params.window_fraction);
+        let length = (wall_center.x * wall_center.x + wall_center.y * wall_center.y)
+            .sqrt()
+            .max(1e-9);
+        let outward = Vec3::new(wall_center.x / length, wall_center.y / length, 0.0);
+        let tree_center = Vec3::new(
+            wall_center.x + outward.x * params.tree_distance,
+            wall_center.y + outward.y * params.tree_distance,
+            0.0,
+        );
+
+        for _ in 0..params.window_tree_points {
+            // Uniform disk → a round canopy blob.
+            let angle = rng.next_01() * std::f64::consts::TAU;
+            let radius = params.tree_size * rng.next_01().sqrt();
+            let true_point = Vec3::new(
+                tree_center.x + radius * angle.cos(),
+                tree_center.y + radius * angle.sin(),
+                0.0,
+            );
+            let open_point = apply(&window_drift, true_point);
+            cloud.points.push([open_point.x as f32, open_point.y as f32, open_point.z as f32]);
+            timestamps.push(window_time);
+        }
     }
 
     cloud.timestamps = Some(timestamps);
